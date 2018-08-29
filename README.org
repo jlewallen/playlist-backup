@@ -1,0 +1,7 @@
+#+TITLE:	README for playlist-backup
+#+AUTHOR:	Jacob Lewallen
+#+EMAIL:	jlewalle@gmail.commit
+
+This just keeps a private backup of a collaborative playlist. Could also be used
+to keep a copy of your Discovery Weekly's I guess, too.
+
