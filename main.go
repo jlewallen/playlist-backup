@@ -62,52 +62,51 @@ func getPlaylistTracks(spotifyClient *spotify.Client, userId string, id spotify.
 	return
 }
 
-func backupPlaylist(spotifyClient *spotify.Client, userId, name string) error {
-	backupName := name + " (backup)"
-	backup, err := getPlaylistByTitle(spotifyClient, backupName)
+func copyPlaylist(spotifyClient *spotify.Client, userId, sourceName, destinationName string) error {
+	destination, err := getPlaylistByTitle(spotifyClient, destinationName)
 	if err != nil {
-		return fmt.Errorf("Error getting %s: %v", backupName, err)
+		return fmt.Errorf("Error getting %s: %v", destinationName, err)
 	}
-	if backup == nil {
-		created, err := spotifyClient.CreatePlaylistForUser(userId, backupName, true)
+	if destination == nil {
+		created, err := spotifyClient.CreatePlaylistForUser(userId, destinationName, true)
 		if err != nil {
 			return fmt.Errorf("Unable to create playlist: %v", err)
 		}
 
-		log.Printf("Created backup: %v", created)
+		log.Printf("Created destination: %v", created)
 
-		backup, err = getPlaylistByTitle(spotifyClient, backupName)
+		destination, err = getPlaylistByTitle(spotifyClient, destinationName)
 		if err != nil {
-			return fmt.Errorf("Error getting %s: %v", backupName, err)
+			return fmt.Errorf("Error getting %s: %v", destinationName, err)
 		}
 	} else {
-		log.Printf("Found backup: %v", backup)
+		log.Printf("Found destination: %v", destination)
 	}
 
-	main, err := getPlaylistByTitle(spotifyClient, name)
+	main, err := getPlaylistByTitle(spotifyClient, sourceName)
 	if err != nil {
-		return fmt.Errorf("Error getting %s: %v", name, err)
+		return fmt.Errorf("Error getting %s: %v", sourceName, err)
 	}
 
-	backupTracks, err := getPlaylistTracks(spotifyClient, userId, backup.ID)
+	destinationTracks, err := getPlaylistTracks(spotifyClient, userId, destination.ID)
 	if err != nil {
-		return fmt.Errorf("Error getting %s: %v", name, err)
+		return fmt.Errorf("Error getting %s: %v", sourceName, err)
 	}
 
-	backupMap := make(map[string]bool)
-	for _, track := range backupTracks {
-		backupMap[track.Track.ID.String()] = true
+	destinationMap := make(map[string]bool)
+	for _, track := range destinationTracks {
+		destinationMap[track.Track.ID.String()] = true
 	}
 
 	mainTracks, err := getPlaylistTracks(spotifyClient, userId, main.ID)
 	if err != nil {
-		return fmt.Errorf("Error getting %s: %v", name, err)
+		return fmt.Errorf("Error getting %s: %v", sourceName, err)
 	}
 
 	additions := make([]spotify.ID, 0)
 
 	for _, track := range mainTracks {
-		if _, ok := backupMap[track.Track.ID.String()]; !ok {
+		if _, ok := destinationMap[track.Track.ID.String()]; !ok {
 			additions = append(additions, track.Track.ID)
 		}
 	}
@@ -117,7 +116,7 @@ func backupPlaylist(spotifyClient *spotify.Client, userId, name string) error {
 
 		for i := 0; i < len(additions); i += 50 {
 			batch := additions[i:min(i+50, len(additions))]
-			_, err := spotifyClient.AddTracksToPlaylist(userId, backup.ID, batch...)
+			_, err := spotifyClient.AddTracksToPlaylist(userId, destination.ID, batch...)
 			if err != nil {
 				return fmt.Errorf("Error adding tracks: %v", err)
 			}
@@ -135,8 +134,8 @@ type options struct {
 func main() {
 	o := options{}
 
-	flag.StringVar(&o.Title, "title", "", "title of the playlist to backup")
-	flag.IntVar(&o.Interval, "interval", 60*5, "seconds between backups")
+	flag.StringVar(&o.Title, "title", "", "title of the playlist to destination")
+	flag.IntVar(&o.Interval, "interval", 60*5, "seconds between destinations")
 
 	flag.Parse()
 
@@ -152,7 +151,12 @@ func main() {
 		if err != nil {
 			log.Printf("Error: %v", err)
 		} else {
-			err := backupPlaylist(spotifyClient, user.ID, o.Title)
+			err := copyPlaylist(spotifyClient, user.ID, o.Title, o.Title+" (backup)")
+			if err != nil {
+				log.Printf("Error: %v", err)
+			}
+
+			err = copyPlaylist(spotifyClient, user.ID, o.Title+" (backup)", o.Title)
 			if err != nil {
 				log.Printf("Error: %v", err)
 			}
